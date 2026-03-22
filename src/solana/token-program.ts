@@ -3,13 +3,92 @@ import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { slot, blockHeight, accounts, latestBlockhash, incrementSlot, validBlockhashes, processedSignatures } from "./state"
 
+const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 export const getTokenAccountBalance = (pubkey: string): any => {
+    const tokenAccount = accounts.get(pubkey);
+
+    if (!tokenAccount || tokenAccount.data.length !== 165 || !tokenAccount.owner.equals(TOKEN_PROGRAM_ID)) {
+        throw {
+            code: -32602,
+            message: "Invalid public key: not a token account"
+        };
+    }
+
+    const tokenMint = new PublicKey(tokenAccount.data.subarray(0, 32));
+    const amount = tokenAccount.data.readBigInt64LE(64);
+    const tokenMintAccount = accounts.get(tokenMint.toBase58());
+
+    if (!tokenMintAccount) {
+        throw {
+            code: -32602,
+            message: "Mint account not found for token account"
+        };
+    }
+
+    const decimals = tokenMintAccount.data.readUInt8(44);
     return {
+        context: { slot },
+        value: {
+            amount: amount.toString(),
+            decimals: decimals,
+            uiAmount: Number(amount) / (10 ** decimals)
+        }
     }
 }
 
+// getTokenAccountsByOwner — params: [ownerBase58, filter, { encoding: "base64" }]
 
+// filter is either { mint: "<pubkeyBase58>" } or { programId: "<pubkeyBase58>" }
+// Response: { context: { slot }, value: [{ pubkey, account: <AccountInfo> }, ...] }
+// Return empty array if no matching accounts.
+export const getTokenAccountsByOwner = (ownerBase58: string, filter: any, encoding: any): any => {
+    const result: any[] = [];
+    const walletOwner = new PublicKey(ownerBase58);
+
+    // Prepare filters
+    const mintFilter = filter.mint ? new PublicKey(filter.mint) : null;
+    const programIdFilter = filter.programId ? new PublicKey(filter.programId) : null;
+
+    for (const [pubkey, account] of accounts) {
+        // 1. Basic Checks: Must be correct size for a Token Account (165 bytes)
+        if (account.data.length !== 165) continue;
+
+        // 2. Program ID Check: If filtering by programId, account owner must match
+        if (programIdFilter && !account.owner.equals(programIdFilter)) continue;
+        // If no programId specified, strict Solana nodes usually require one or implied TokenProgram,
+        // but here we ensure it is at least owned by our known Token Program ID.
+        if (!programIdFilter && !account.owner.equals(TOKEN_PROGRAM_ID)) continue;
+
+        // 3. Deserialize: Check if the Token Account's 'Owner' field (offset 32) matches the request
+        const accountOwner = new PublicKey(account.data.subarray(32, 64));
+        if (!accountOwner.equals(walletOwner)) continue;
+
+        // 4. Deserialize: Check Mint filter if provided (offset 0)
+        if (mintFilter) {
+            const accountMint = new PublicKey(account.data.subarray(0, 32));
+            if (!accountMint.equals(mintFilter)) continue;
+        }
+
+        // Found a match
+        result.push({
+            pubkey,
+            account: {
+                executable: account.executable,
+                owner: account.owner.toBase58(),
+                lamports: account.lamports,
+                data: [account.data.toString('base64'), 'base64'],
+                rentEpoch: account.rentEpoch
+            }
+        });
+    }
+
+    return {
+        context: { slot },
+        value: result
+    };
+}
 
 export const executeTokenTransaction = (instruction: TransactionInstruction) => {
     // Decode the instruction data(discriminator is u8)
@@ -47,8 +126,6 @@ export const executeTokenTransaction = (instruction: TransactionInstruction) => 
             break;
     }
 }
-
-
 
 const InitializeMint2 = (instruction: TransactionInstruction) => {
     // InitializeMint2 (discriminator 20): [u8 disc][u8 decimals][32 bytes mintAuthority][u8 hasFreezeAuth][32 bytes freezeAuthority]
@@ -407,5 +484,63 @@ const CloseAccount = (instruction: TransactionInstruction) => {
 }
 
 export const executeATAInstruction = (instruction: TransactionInstruction) => {
-    //
+    // Create (discriminator 0 or empty instruction data)
+    // Accounts: [payer, ata, owner, mint, systemProgram, tokenProgram]
+    // Derive the ATA address as a PDA: findProgramAddress([owner, TOKEN_PROGRAM_ID, mint], ATA_PROGRAM_ID)
+    // Verify the derived address matches the ATA account provided.
+    // Create the account (allocate 165 bytes, assign to Token Program, fund with rent-exempt minimum).
+    // Initialize it as a token account (set mint, owner, amount=0, state=1).
+    // Fail if the ATA already exists.
+
+    // Should have no instruction data or discriminator should be 0
+    if (instruction.data.length > 0 && instruction.data[0] !== 0) throw new Error("Invalid ATA instruction");
+
+    // Input Extraction
+    const payerKey = instruction.keys[0];
+    const ataKey = instruction.keys[1];
+    const ownerKey = instruction.keys[2];
+    const mintKey = instruction.keys[3];
+    // const systemProgramKey = instruction.keys[4];
+    // const tokenProgramKey = instruction.keys[5];
+
+    if (!payerKey.isSigner) throw new Error("Payer must be a signer");
+
+    // Derive the ATA address as a PDA: findProgramAddress([owner, TOKEN_PROGRAM_ID, mint], ATA_PROGRAM_ID)
+    const [derivedATA] = PublicKey.findProgramAddressSync(
+        [ownerKey.pubkey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintKey.pubkey.toBuffer()],
+        ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+
+    if (!derivedATA.equals(ataKey.pubkey)) throw new Error("ATA mismatch");
+
+    const ataAddress = ataKey.pubkey.toBase58();
+    if (accounts.has(ataAddress)) throw new Error("ATA already exists");
+
+    const payerAccount = accounts.get(payerKey.pubkey.toBase58());
+    if (!payerAccount) throw new Error("Payer account not found");
+
+    const space = 165;
+    const rentExemptMinimum = (space + 128) * 2;
+
+    if (payerAccount.lamports < rentExemptMinimum) throw new Error("Insufficient funds for rent");
+
+    payerAccount.lamports -= rentExemptMinimum;
+
+    const data = Buffer.alloc(space);
+    mintKey.pubkey.toBuffer().copy(data, 0); // Mint
+    ownerKey.pubkey.toBuffer().copy(data, 32); // Owner
+    data.writeBigUInt64LE(0n, 64); // Amount
+    data.writeUInt8(1, 108); // State (Initialized)
+
+    accounts.set(ataAddress, {
+        lamports: rentExemptMinimum,
+        data,
+        owner: TOKEN_PROGRAM_ID,
+        executable: false,
+        rentEpoch: 0
+    });
+
+    const signature = bs58.encode(nacl.randomBytes(64));
+    processedSignatures.add(signature);
+    return signature;
 }
