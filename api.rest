@@ -1,0 +1,56 @@
+###
+GET http://localhost:3000/health_check HTTP/1.1
+
+###
+POST http://localhost:3000/ HTTP/1.1
+content-type: application/json
+
+{
+    "jsonrpc": "2.0",
+    "method": "getVersion",
+    "id": 1
+}
+
+###
+POST http://localhost:3000/ HTTP/1.1
+content-type: application/json
+
+{
+    "jsonrpc": "2.0",
+    "method": "getBlockHeight",
+    "params": ["sample"],
+    "id": 1
+}
+
+### getAccountInfo
+POST http://localhost:3000/ HTTP/1.1
+content-type: application/json
+
+{
+    "jsonrpc": "2.0",
+    "method": "getAccountInfo",
+    "params": ["ADZqN5xqpnP1DuYiUY356QwEv2Tzh3SWPa6HamQbzg9b"],
+    "id": 1
+}
+
+### requestAirdrop
+POST http://localhost:3000/ HTTP/1.1
+content-type: application/json
+
+{
+    "jsonrpc": "2.0",
+    "method": "requestAirdrop",
+    "params": ["ADZqN5xqpnP1DuYiUY356QwEv2Tzh3SWPa6HamQbzg9b", 5],
+    "id": 1
+}
+
+### getBalance
+POST http://localhost:3000/ HTTP/1.1
+content-type: application/json
+
+{
+    "jsonrpc": "2.0",
+    "method": "getBalance",
+    "params": ["ADZqN5xqpnP1DuYiUY356QwEv2Tzh3SWPa6HamQbzg9b"],
+    "id": 1
+}
