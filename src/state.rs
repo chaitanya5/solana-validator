@@ -7,7 +7,9 @@ pub struct AppState {
     pub blockheight: AtomicU64,
 }
 
-pub fn mine_block(state: AppState) {
-    state.slot = state.slot.into().fetch_add(1, Ordering::SeqCst);
-    // state.blockheight += 1;
+pub fn mine_block(state: &AppState) -> &AppState {
+    state.slot.fetch_add(1, Ordering::SeqCst);
+    state.blockheight.fetch_add(1, Ordering::SeqCst);
+
+    state
 }

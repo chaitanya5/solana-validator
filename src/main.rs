@@ -1,5 +1,5 @@
 use axum::{
-    Json, Router,
+    extract::State, Json, Router,
     routing::{get, post},
 };
 use std::{str::FromStr, sync::{Arc, atomic::AtomicU64}};
@@ -8,17 +8,22 @@ mod handlers;
 mod types;
 mod state;
 
-use handlers::get_version;
-use types::{AllowedMethods, RpcRequestObject, RpcResponseObject};
+use handlers::{
+    get_version,
+    get_slot,
+    mine_block,
+};
+use types::{AllowedMethods, RpcRequestObject, RpcResponseObject, RpcError};
 use state::AppState;
-
-use crate::types::RpcError;
 
 async fn health_check() -> &'static str {
     "OK"
 }
 
-async fn handler(Json(body): Json<RpcRequestObject>) -> Json<RpcResponseObject> {
+async fn handler(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<RpcRequestObject>
+) -> Json<RpcResponseObject> {
     let RpcRequestObject {
         jsonrpc,
         method,
@@ -44,7 +49,11 @@ async fn handler(Json(body): Json<RpcRequestObject>) -> Json<RpcResponseObject> 
             response
         }
         Ok(AllowedMethods::GetSlot) => {
-            let response = get_version(id).await;
+            let response = get_slot(id, &state).await;
+            response
+        }
+        Ok(AllowedMethods::MineBlock) => {
+            let response = mine_block(id, &state).await;
             response
         }
         Err(_) => {

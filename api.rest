@@ -17,6 +17,16 @@ content-type: application/json
 
 {
     "jsonrpc": "2.0",
+    "method": "mineBlock",
+    "id": 1
+}
+
+###
+POST http://localhost:3000/ HTTP/1.1
+content-type: application/json
+
+{
+    "jsonrpc": "2.0",
     "method": "getBlockHeight",
     "params": ["sample"],
     "id": 1

@@ -47,7 +47,8 @@ pub struct RpcResponseObject {
 #[derive(Debug, PartialEq)]
 pub enum AllowedMethods {
     GetVersion,
-    GetSlot
+    GetSlot,
+    MineBlock,
 }
 
 impl FromStr for AllowedMethods {
@@ -58,6 +59,7 @@ impl FromStr for AllowedMethods {
         match input {
             "getVersion" => Ok(AllowedMethods::GetVersion),
             "getSlot" =>Ok(AllowedMethods::GetSlot),
+            "mineBlock" => Ok(AllowedMethods::MineBlock),
             _ => Err(())
         }
     }
