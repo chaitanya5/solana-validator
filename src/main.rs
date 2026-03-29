@@ -2,7 +2,10 @@ use axum::{
     extract::State, Json, Router,
     routing::{get, post},
 };
-use std::{str::FromStr, sync::{Arc, atomic::AtomicU64}};
+use tokio::sync::RwLock;
+use std::{collections::{HashMap, HashSet}, str::FromStr, sync::{Arc, atomic::AtomicU64}};
+use rand::prelude::*;
+use bs58;
 
 mod handlers;
 mod types;
@@ -76,8 +79,19 @@ async fn main() {
     let state = Arc::new(AppState {
         slot: AtomicU64::new(0),
         blockheight: AtomicU64::new(0),
+        latest_block_hash: RwLock::new("".to_string()),
+        valid_block_hashes: RwLock::new(HashMap::new()),
+        accounts_memory: RwLock::new(HashMap::new()),
+        processed_accounts: RwLock::new(HashSet::new())
     });
-
+    
+    // Calculate initial blockhash
+    // let mut rng = rand::rng();
+    // let random_bytes: [u8; 32] = rng.random();
+    // let randomHash = bs58::encode(random_bytes).into_string();
+    // state.latest_block_hash = randomHash;
+    // state.valid_block_hashes.insert(randomHash, 150);
+    
     // You can chain multiple routes together using the builder pattern
     let app = Router::new()
         .route("/health_check", get(health_check))
