@@ -1,23 +1,24 @@
 use axum::{
-    extract::State, Json, Router,
+    Json, Router,
+    extract::State,
     routing::{get, post},
 };
-use tokio::sync::RwLock;
-use std::{collections::{HashMap, HashSet}, str::FromStr, sync::{Arc, atomic::AtomicU64}};
-use rand::prelude::*;
 use bs58;
+use rand::prelude::*;
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+    sync::{Arc, atomic::AtomicU64},
+};
+use tokio::sync::RwLock;
 
 mod handlers;
-mod types;
 mod state;
+mod types;
 
-use handlers::{
-    get_version,
-    get_slot,
-    mine_block,
-};
-use types::{AllowedMethods, RpcRequestObject, RpcResponseObject, RpcError};
+use handlers::{get_slot, get_version, mine_block};
 use state::AppState;
+use types::{AllowedMethods, RpcError, RpcRequestObject, RpcResponseObject};
 
 async fn health_check() -> &'static str {
     "OK"
@@ -25,7 +26,7 @@ async fn health_check() -> &'static str {
 
 async fn handler(
     State(state): State<Arc<AppState>>,
-    Json(body): Json<RpcRequestObject>
+    Json(body): Json<RpcRequestObject>,
 ) -> Json<RpcResponseObject> {
     let RpcRequestObject {
         jsonrpc,
@@ -75,23 +76,24 @@ async fn handler(
 
 #[tokio::main]
 async fn main() {
-    // Initialize the state wrapped in an Arc (Atomic Reference Counter)
+    // Calculate initial blockhash first
+    let mut rng = rand::rng();
+    let random_bytes: [u8; 32] = rng.random();
+    let random_hash = bs58::encode(random_bytes).into_string();
+
+    let mut initial_block_hashes = HashMap::new();
+    initial_block_hashes.insert(random_hash.clone(), 150);
+
+    // Now initialize the state with the actual values
     let state = Arc::new(AppState {
         slot: AtomicU64::new(0),
         blockheight: AtomicU64::new(0),
-        latest_block_hash: RwLock::new("".to_string()),
-        valid_block_hashes: RwLock::new(HashMap::new()),
+        latest_block_hash: RwLock::new(random_hash),
+        valid_block_hashes: RwLock::new(initial_block_hashes),
         accounts_memory: RwLock::new(HashMap::new()),
-        processed_accounts: RwLock::new(HashSet::new())
+        processed_accounts: RwLock::new(HashSet::new()),
     });
-    
-    // Calculate initial blockhash
-    // let mut rng = rand::rng();
-    // let random_bytes: [u8; 32] = rng.random();
-    // let randomHash = bs58::encode(random_bytes).into_string();
-    // state.latest_block_hash = randomHash;
-    // state.valid_block_hashes.insert(randomHash, 150);
-    
+
     // You can chain multiple routes together using the builder pattern
     let app = Router::new()
         .route("/health_check", get(health_check))
