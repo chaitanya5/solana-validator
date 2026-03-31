@@ -16,7 +16,7 @@ mod handlers;
 mod state;
 mod types;
 
-use handlers::{get_slot, get_version, mine_block};
+use handlers::{create_account, get_slot, get_version, mine_block};
 use state::AppState;
 use types::{AllowedMethods, RpcError, RpcRequestObject, RpcResponseObject};
 
@@ -60,6 +60,11 @@ async fn handler(
             let response = mine_block(id, &state).await;
             response
         }
+        Ok(AllowedMethods::SendTransaction) => {
+            let response = send_transaction(id, params, &state).await;
+            response
+        }
+
         Err(_) => {
             return Json(RpcResponseObject {
                 jsonrpc: String::from("2.0"),
@@ -98,7 +103,7 @@ async fn main() {
     let app = Router::new()
         .route("/health_check", get(health_check))
         .route("/", post(handler))
-        .with_state(state);
+        .with_state(Arc::clone(&state)); // Cloning the reference and not the data
 
     // Create a TCP listener
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")

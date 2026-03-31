@@ -12,3 +12,4 @@ solana-system-interface = { version = "3.1.0", features = ["bincode"] }
 solana-account = { version = "4.1.0", features = ["bincode"] }
 rand = "0.10.0"
 bs58 = "0.5.1"
+solana-transaction = { version = "4.0.0", features = ["serde"] }

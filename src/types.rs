@@ -49,6 +49,11 @@ pub enum AllowedMethods {
     GetVersion,
     GetSlot,
     MineBlock,
+    SendTransaction,
+    // GetBlockHeight,
+    // GetAccountInfo,
+    // RequestAirdrop,
+    // GetBalance,
 }
 
 impl FromStr for AllowedMethods {
@@ -60,6 +65,11 @@ impl FromStr for AllowedMethods {
             "getVersion" => Ok(AllowedMethods::GetVersion),
             "getSlot" =>Ok(AllowedMethods::GetSlot),
             "mineBlock" => Ok(AllowedMethods::MineBlock),
+            "sendTransaction" => Ok(AllowedMethods::SendTransaction),
+            // "getBlockHeight" => Ok(AllowedMethods::GetBlockHeight),
+            // "getAccountInfo" => Ok(AllowedMethods::GetAccountInfo),
+            // "requestAirdrop" => Ok(AllowedMethods::RequestAirdrop),
+            // "getBalance" => Ok(AllowedMethods::GetBalance),
             _ => Err(())
         }
     }
